@@ -1,15 +1,17 @@
 @echo off
 setlocal EnableDelayedExpansion
-title Limpeza Completa do Windows - Versao Final V2
+title Limpeza Completa do Windows - Versao Final V5 Server Edition (Automatica)
 color 0A
 
 echo ==========================================================
-echo          LIMPEZA COMPLETA DO WINDOWS - FINAL V2
+echo          LIMPEZA COMPLETA DO WINDOWS - V5 Server Edition
+echo                   (MODO AUTOMATICO)
 echo ==========================================================
 echo.
 echo Este script remove apenas arquivos temporarios, caches e
 echo logs que os proprios programas recriam automaticamente.
 echo Nada de login, sessao ou configuracao e apagado.
+echo.
 echo.
 
 :: ----------------------------------------------------------
@@ -26,21 +28,8 @@ if %errorlevel% neq 0 (
     exit
 )
 
-
-echo Dica: feche o navegador (Chrome/Edge/Firefox) e apps como
-echo Discord, Slack, Teams e Spotify antes de continuar, para que
-echo o cache deles possa ser apagado por completo.
-echo.
-pause
-
-echo.
-echo Deseja tambem executar as limpezas AVANCADAS?
-echo (Windows.old, hibernacao, reset de backups de atualizacao,
-echo  pontos de restauracao antigos)
-echo Essas opcoes liberam BEM mais espaco, mas algumas sao
-echo irreversiveis. Sera perguntado item por item.
-set /p ADVANCED="Continuar com opcoes avancadas? (S/N): "
-echo.
+:: Etapas avancadas: mude para S se quiser que rodem automaticamente
+set "ADVANCED=N"
 
 :: ============================================================
 :: LIMPEZA PADRAO (100% segura - nada aqui exige confirmacao)
@@ -208,9 +197,9 @@ echo Limpeza padrao concluida em %date% %time% >> "%LOG%"
 echo.
 
 :: ============================================================
-:: LIMPEZA AVANCADA (opcional - cada item pede confirmacao,
-:: pois envolve acoes irreversiveis ou que reduzem sua rede de
-:: seguranca em caso de problema no sistema)
+:: LIMPEZA AVANCADA (desativada por padrao neste modo automatico)
+:: Para ativar, mude a linha "set ADVANCED=N" acima para "S".
+:: Cada bloco abaixo roda direto, sem perguntar, se ADVANCED=S.
 :: ============================================================
 
 if /i not "%ADVANCED%"=="S" goto :FIM
@@ -220,79 +209,37 @@ echo                  ETAPAS AVANCADAS
 echo ==========================================================
 echo.
 
-:: ------------------------------------------------------------
 :: Windows.old (IRREVERSIVEL: impede voltar para o Windows anterior)
-:: ------------------------------------------------------------
 if exist "%SystemDrive%\Windows.old" (
-    echo A pasta Windows.old foi encontrada e pode ocupar varios GB.
-    echo ATENCAO: apos apaga-la, NAO sera mais possivel voltar para a
-    echo versao anterior do Windows.
-    set /p DELOLD="Apagar Windows.old agora? (S/N): "
-    if /i "!DELOLD!"=="S" (
-        echo Apagando Windows.old, isso pode demorar...
-        takeown /F "%SystemDrive%\Windows.old" /R /A /D Y >nul 2>&1
-        icacls "%SystemDrive%\Windows.old" /reset /T /C /Q >nul 2>&1
-        rd /s /q "%SystemDrive%\Windows.old" 2>nul
-        echo Windows.old removido. >> "%LOG%"
-    ) else (
-        echo Windows.old mantido, etapa pulada.
-    )
+    echo Apagando Windows.old, isso pode demorar...
+    takeown /F "%SystemDrive%\Windows.old" /R /A /D Y >nul 2>&1
+    icacls "%SystemDrive%\Windows.old" /reset /T /C /Q >nul 2>&1
+    rd /s /q "%SystemDrive%\Windows.old" 2>nul
+    echo Windows.old removido. >> "%LOG%"
 ) else (
     echo Nenhuma pasta Windows.old encontrada, pulando esta etapa.
 )
 echo.
 
-:: ------------------------------------------------------------
 :: Hibernacao (hiberfil.sys) - reversivel
-:: ------------------------------------------------------------
-echo Desativar a hibernacao libera o espaco ocupado pelo arquivo
-echo hiberfil.sys (geralmente varios GB). Voce pode reativar depois
-echo com o comando: powercfg /hibernate on
-set /p HIBER="Desativar hibernacao agora? (S/N): "
-if /i "!HIBER!"=="S" (
-    powercfg /hibernate off
-    echo Hibernacao desativada. >> "%LOG%"
-) else (
-    echo Hibernacao mantida, etapa pulada.
-)
+powercfg /hibernate off
+echo Hibernacao desativada. >> "%LOG%"
 echo.
 
-:: ------------------------------------------------------------
 :: Reset avancado do WinSxS (impede desinstalar updates antigos)
-:: ------------------------------------------------------------
-echo A opcao avancada de limpeza do WinSxS (ResetBase) libera mais
-echo espaco, mas impede desinstalar atualizacoes do Windows ja
-echo instaladas. So use se o sistema estiver estavel ha algum tempo.
-set /p RESETBASE="Executar limpeza avancada do WinSxS? (S/N): "
-if /i "!RESETBASE!"=="S" (
-    DISM /Online /Cleanup-Image /StartComponentCleanup /ResetBase /NoRestart
-    echo WinSxS ResetBase executado. >> "%LOG%"
-) else (
-    echo ResetBase do WinSxS pulado.
-)
+DISM /Online /Cleanup-Image /StartComponentCleanup /ResetBase /NoRestart
+echo WinSxS ResetBase executado. >> "%LOG%"
 echo.
 
-:: ------------------------------------------------------------
-:: Pontos de restauracao antigos (reduz sua rede de seguranca)
-:: ------------------------------------------------------------
-echo Manter so o ponto de restauracao mais recente libera espaco,
-echo mas reduz suas opcoes de "voltar no tempo" caso um driver ou
-echo update quebre o sistema depois. O ponto mais novo e mantido.
-set /p RESTORE="Apagar pontos de restauracao antigos (manter so o mais recente)? (S/N): "
-if /i "!RESTORE!"=="S" (
-    PowerShell -NoProfile -ExecutionPolicy Bypass -Command ^
-      "$points = Get-CimInstance Win32_ShadowCopy | Sort-Object InstallDate; if ($points.Count -gt 1) { $points | Select-Object -SkipLast 1 | ForEach-Object { vssadmin delete shadows /Shadow=$($_.ID) /quiet } }" >nul 2>&1
-    echo Pontos de restauracao antigos removidos, mantido o mais recente. >> "%LOG%"
-) else (
-    echo Pontos de restauracao mantidos, etapa pulada.
-)
+:: Pontos de restauracao antigos (mantem so o mais recente)
+PowerShell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$points = Get-CimInstance Win32_ShadowCopy | Sort-Object InstallDate; if ($points.Count -gt 1) { $points | Select-Object -SkipLast 1 | ForEach-Object { vssadmin delete shadows /Shadow=$($_.ID) /quiet } }" >nul 2>&1
+echo Pontos de restauracao antigos removidos, mantido o mais recente. >> "%LOG%"
 echo.
 
 :FIM
 echo ==========================================================
 echo             LIMPEZA CONCLUIDA COM SUCESSO!
-echo   Um resumo foi salvo em: %LOG%
 echo ==========================================================
 echo.
-pause
 exit
